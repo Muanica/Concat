@@ -813,7 +813,7 @@
   "start.transparent": "Transparente",
   "start.transparentHint": "Transparente onde nada cobre. Exporte como ProRes 4444 (.mov) ou WebM para manter isso; outros formatos mostram preto ali.",
   "start.welcome": "Boas-vindas ao Concat",
-  "start.welcomeBack": "Olá de novo",
+  "start.welcomeBack": "Olá, bem-vindo à aula de vídeo",
   "start.welcomeBackNote": "Continue de onde parou ou comece algo novo.",
   "start.welcomeNote": "Um editor de vídeo gratuito que roda inteiramente nesta máquina.",
   "start.whatsNew": "Novidades da {0}",
