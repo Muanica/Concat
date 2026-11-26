@@ -61,6 +61,15 @@ pub fn wanted(width: u32, height: u32) -> bool {
     width > 0 && height > 0
 }
 
+/// Threads a proxy decodes and encodes with: half the machine's, at most
+/// four, and never fewer than one. A bigger CPU writes the copy faster; a
+/// two-core machine keeps a core for the window, which is the whole point
+/// of writing the copy in the background.
+fn proxy_threads() -> u16 {
+    let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
+    (cores / 2).clamp(1, 4) as u16
+}
+
 /// The proxy's size for a `width` by `height` original: the long side a
 /// quarter of the original's, not under [`shortest_long_side`] and never
 /// over the original, the aspect kept, both sides even.
@@ -265,37 +274,8 @@ pub fn sweep(project: &Path, keep: &HashSet<PathBuf>) -> usize {
 pub fn write(
     source: &str,
     target: &Path,
-    size: (u32, u32),
-    range: Option<ColorRange>,
-) -> Result<(), String> {
-    // The picture is read on the video hardware first: a phone's HEVC file
-    // decodes several times faster there than on a laptop's CPU, and the
-    // copy is what the whole edit waits for. A file the hardware cannot
-    // read, or that fails half way, is read again in software.
-    match write_with(source, target, size, range, true) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            log::info!("{source}: proxy on the hardware failed ({error}); trying software");
-            write_with(source, target, size, range, false)
-        }
-    }
-}
-
-/// Threads for a proxy: half the machine's, at most four, and never fewer
-/// than one. A bigger CPU writes the copy faster; a two-core machine keeps
-/// a core for the window, which is the whole point of writing it in the
-/// background.
-fn proxy_threads() -> u16 {
-    let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
-    (cores / 2).clamp(1, 4) as u16
-}
-
-fn write_with(
-    source: &str,
-    target: &Path,
     (width, height): (u32, u32),
     range: Option<ColorRange>,
-    hardware_decode: bool,
 ) -> Result<(), String> {
     let threads = proxy_threads();
     let info = concat_media::probe(source).map_err(|error| error.to_string())?;
@@ -312,14 +292,20 @@ fn write_with(
     // Written beside the target under a name the muxer still knows the
     // format of, and moved into place only when whole.
     let partial = target.with_extension("part.mp4");
-    let mut options = DecodeOptions::default()
+    let options = DecodeOptions::default()
         .scaled_to(width, height)
+        // In software, deliberately. The window is already decoding on the
+        // video hardware to draw the picture, and a second decoder on the
+        // same hardware - an Intel Iris Xe, say, with the window's Direct3D
+        // device alongside it - took the whole program down with an access
+        // violation inside the driver, part way through a bin of phone
+        // clips. A copy written on the CPU takes a few seconds per clip,
+        // runs beside the editing instead of competing with it for the one
+        // piece of hardware, and cannot do that.
+        .in_software()
         .threaded(threads)
         .in_range(range)
         .deep(hdr);
-    if !hardware_decode {
-        options = options.in_software();
-    }
     let mut decoder = Decoder::open(source, &options).map_err(|error| error.to_string())?;
     let encoding = EncodeOptions {
         codec: if hdr {
