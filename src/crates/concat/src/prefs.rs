@@ -142,6 +142,14 @@ pub struct Preferences {
     /// playback only; the `false` saved under that name was that default,
     /// not anyone's choice, so it is left behind with the old name.
     pub scrub_copies: Option<bool>,
+    /// Whether the Version page asks GitHub for the releases by itself the
+    /// first time it is opened in a run. `None` is on, as it has always
+    /// been. A room with no internet - a school's computers, a build
+    /// handed out on a stick - sets `updateChecks: false` in the settings
+    /// file, and the page then waits for the button instead of spending a
+    /// minute on a request that cannot arrive. The button still works, so
+    /// nothing is taken away; see [`Preferences::update_checks`].
+    pub update_checks: Option<bool>,
     /// Drawing in software: the window and the compositor on the
     /// platform's software rasteriser (WARP, lavapipe) instead of the GPU,
     /// as the person chose in Settings > General or with `concat
@@ -310,6 +318,12 @@ impl Preferences {
     /// Whether videos get scrub copies; see `scrub_copies`.
     pub fn scrub_copies(&self) -> bool {
         self.scrub_copies.unwrap_or(!cfg!(target_os = "ios"))
+    }
+
+    /// Whether the Version page looks for releases on its own; see
+    /// `update_checks`.
+    pub fn update_checks(&self) -> bool {
+        self.update_checks.unwrap_or(true)
     }
 
     /// Which of `names` — the theme's accents, in its order — the remembered

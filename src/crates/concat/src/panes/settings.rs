@@ -355,7 +355,7 @@ impl SettingsPane {
                 // The Version page looks for the releases the first time it
                 // is opened in a run, so it has something to say and to list
                 // without a press; the button looks again.
-                if index == VERSION_PAGE && !self.checked {
+                if index == VERSION_PAGE && !self.checked && studio.prefs.update_checks() {
                     self.check_updates();
                 }
             }
