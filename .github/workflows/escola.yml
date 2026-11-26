@@ -28,7 +28,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -138,6 +138,26 @@ jobs:
           set -euo pipefail
           du -sh pacote
           find pacote -maxdepth 2 | sort
+
+      # O pacote também sai como release público do fork, para o
+      # descarregar sem sessão no GitHub: um artefacto só se descarrega
+      # com login, e o link de uma release funciona num navegador normal e
+      # num gestor de transferências, com barra de progresso e retoma.
+      - name: Publicar como release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          nome=Concat-Escola-windows-x86_64.zip
+          (cd pacote && zip -qr "../$nome" .)
+          sha256sum "$nome" | tee "$nome.sha256"
+          tag="escola-${{ inputs.run_id }}"
+          gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$tag" "$nome" "$nome.sha256" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Concat Escola (compilação ${{ inputs.run_id }})" \
+            --notes "Pasta para copiar e abrir, sem instalação e sem internet. Desbloqueie o ZIP nas Propriedades antes de extrair e leia o LEIA-ME.txt lá dentro. Software livre AGPL-3.0-or-later; o código está neste repositório."
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
