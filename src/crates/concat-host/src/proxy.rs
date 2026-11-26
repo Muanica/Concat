@@ -254,9 +254,37 @@ pub fn sweep(project: &Path, keep: &HashSet<PathBuf>) -> usize {
 pub fn write(
     source: &str,
     target: &Path,
-    (width, height): (u32, u32),
+    size: (u32, u32),
     range: Option<ColorRange>,
 ) -> Result<(), String> {
+    // The picture is read on the video hardware first: a phone's HEVC file
+    // decodes several times faster there than on a laptop's CPU, and the
+    // copy is what the whole edit waits for. A file the hardware cannot
+    // read, or that fails half way, is read again in software.
+    match write_with(source, target, size, range, true) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            log::info!("{source}: proxy on the hardware failed ({error}); trying software");
+            write_with(source, target, size, range, false)
+        }
+    }
+}
+
+/// Threads for a proxy: half the machine's, at least two and at most four,
+/// so it is written faster on a bigger CPU and the window stays usable.
+fn proxy_threads() -> u16 {
+    let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
+    (cores / 2).clamp(2, 4) as u16
+}
+
+fn write_with(
+    source: &str,
+    target: &Path,
+    (width, height): (u32, u32),
+    range: Option<ColorRange>,
+    hardware_decode: bool,
+) -> Result<(), String> {
+    let threads = proxy_threads();
     let info = concat_media::probe(source).map_err(|error| error.to_string())?;
     let (rate, signal) = info
         .video
@@ -271,12 +299,14 @@ pub fn write(
     // Written beside the target under a name the muxer still knows the
     // format of, and moved into place only when whole.
     let partial = target.with_extension("part.mp4");
-    let options = DecodeOptions::default()
+    let mut options = DecodeOptions::default()
         .scaled_to(width, height)
-        .in_software()
-        .threaded(2)
+        .threaded(threads)
         .in_range(range)
         .deep(hdr);
+    if !hardware_decode {
+        options = options.in_software();
+    }
     let mut decoder = Decoder::open(source, &options).map_err(|error| error.to_string())?;
     let encoding = EncodeOptions {
         codec: if hdr {
@@ -295,7 +325,7 @@ pub fn write(
         // HEVC in ten bits costs the CPU far more than H.264 does; the
         // media engine does it for nothing where there is one.
         hardware: hdr,
-        threads: 2,
+        threads,
         software_only: false,
     };
     let mut encoder = if hdr {

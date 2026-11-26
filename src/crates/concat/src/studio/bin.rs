@@ -57,6 +57,18 @@ impl Studio {
                 ))
             })
             .collect();
+        // The proxy lane writes one copy at a time, in the order asked: the
+        // videos the timeline uses go first, so what is being edited is
+        // smooth before the rest of the bin has its copies.
+        let mut unproxied = unproxied;
+        let used: std::collections::HashSet<&str> = self
+            .project()
+            .timelines
+            .iter()
+            .flat_map(|timeline| timeline.clips.iter())
+            .map(|clip| clip.media_id.as_str())
+            .collect();
+        unproxied.sort_by_key(|entry| !used.contains(entry.0.as_str()));
         for (id, path, width, height, range, hdr) in unproxied {
             concat_host::proxy::ensure(
                 std::path::Path::new(&project_path),
