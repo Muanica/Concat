@@ -9,6 +9,11 @@
 # administrador que as crianças não têm, e uma pasta copia-se de máquina
 # para máquina com uma pen.
 #
+# Sai como um só .exe, publicado como release do fork: um artefacto do
+# GitHub vem sempre dentro de um ZIP e só se descarrega com sessão
+# iniciada, e um release descarrega-se sem sessão, com barra de progresso.
+# O .exe instala a pasta sem pedir administrador.
+#
 # O que a faz funcionar sem internet são duas coisas. A pasta `portable`
 # ao lado do executável, que o Concat usa em vez de %APPDATA%
 # (concat-host/src/dirs.rs), leva as definições e os modelos com ela. E
@@ -139,28 +144,78 @@ jobs:
           du -sh pacote
           find pacote -maxdepth 2 | sort
 
-      # O pacote também sai como release público do fork, para o
-      # descarregar sem sessão no GitHub: um artefacto só se descarrega
-      # com login, e o link de uma release funciona num navegador normal e
-      # num gestor de transferências, com barra de progresso e retoma.
-      - name: Publicar como release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          nome=Concat-Escola-windows-x86_64.zip
-          (cd pacote && zip -qr "../$nome" .)
-          sha256sum "$nome" | tee "$nome.sha256"
-          tag="escola-${{ inputs.run_id }}"
-          gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$tag" "$nome" "$nome.sha256" \
-            --repo "${{ github.repository }}" \
-            --target "${{ github.sha }}" \
-            --title "Concat Escola (compilação ${{ inputs.run_id }})" \
-            --notes "Pasta para copiar e abrir, sem instalação e sem internet. Desbloqueie o ZIP nas Propriedades antes de extrair e leia o LEIA-ME.txt lá dentro. Software livre AGPL-3.0-or-later; o código está neste repositório."
-
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Concat-Escola-windows-x86_64
           path: pacote
           if-no-files-found: error
+
+  # O instalador, compilado e testado num Windows, e publicado.
+  instalador:
+    needs: pacote
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Buscar a pasta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" `
+            --name Concat-Escola-windows-x86_64 --dir pacote
+          if ($LASTEXITCODE -ne 0) { throw "não consegui buscar a pasta" }
+          if (-not (Test-Path pacote\concat.exe)) { throw "pacote\concat.exe não está lá" }
+
+      - name: Compilar o instalador
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y | Out-Null
+          }
+          if (-not (Test-Path $iscc)) { throw "O Inno Setup não está em $iscc" }
+          & $iscc "/DVersion=${{ github.run_number }}" "/DStage=$PWD\pacote" `
+            "/DOut=$PWD\saida" assets\windows\escola.iss
+          if ($LASTEXITCODE -ne 0) { throw "O Inno Setup falhou: $LASTEXITCODE" }
+          Get-Item saida\Concat-Escola-Setup.exe | Format-List Name, Length
+
+      # Instala de verdade, em silêncio, numa pasta de teste, e vê o que
+      # ficou: um instalador que compila mas deixa a pasta incompleta só se
+      # descobriria na escola, onde não há internet para o voltar a buscar.
+      - name: Testar a instalação
+        run: |
+          $destino = "$PWD\teste"
+          $p = Start-Process -FilePath saida\Concat-Escola-Setup.exe -Wait -PassThru `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=`"$destino`"","/TASKS=`"desktopicon`""
+          if ($p.ExitCode -ne 0) { throw "A instalação saiu com $($p.ExitCode)" }
+          foreach ($f in @("concat.exe","avcodec-62.dll","whisper.dll","LEIA-ME.txt",
+                           "portable\settings.json",
+                           "portable\whisper-models\ggml-base.bin",
+                           "portable\whisper-models\ggml-tiny.bin")) {
+            if (-not (Test-Path "$destino\$f")) { throw "Faltou $f na instalação" }
+            Write-Host "ok  $f"
+          }
+          $base = (Get-Item "$destino\portable\whisper-models\ggml-base.bin").Length
+          if ($base -ne 147951465) { throw "ggml-base.bin tem $base bytes" }
+          Get-Content "$destino\portable\settings.json"
+
+      - name: Publicar o release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $hash = (Get-FileHash saida\Concat-Escola-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  Concat-Escola-Setup.exe" | Out-File -Encoding ascii saida\Concat-Escola-Setup.exe.sha256
+          # Um release só, com um endereço que não muda: o que houver é
+          # substituído. O primeiro, de um ZIP, também sai.
+          foreach ($tag in @("escola", "escola-45732181726")) {
+            try { gh release delete $tag --repo "${{ github.repository }}" --yes --cleanup-tag 2>$null } catch {}
+          }
+          $global:LASTEXITCODE = 0
+          $notas = "Instalador para a escola: um só ficheiro, sem internet e sem administrador. " +
+            "Faça duplo clique; na primeira vez o Windows mostra um aviso azul: " +
+            "clique em Mais informações e depois em Executar mesmo assim. " +
+            "O programa instala-se na conta de quem o executa, com as legendas automáticas já dentro. " +
+            "Software livre AGPL-3.0-or-later; o código está neste repositório. SHA-256: $hash"
+          gh release create escola saida\Concat-Escola-Setup.exe saida\Concat-Escola-Setup.exe.sha256 `
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" `
+            --title "Concat Escola (compilação ${{ github.run_number }})" --notes $notas
+          if ($LASTEXITCODE -ne 0) { throw "não consegui publicar o release" }

@@ -1,58 +1,36 @@
-CONCAT - EDICAO DE VIDEO (versao para a escola)
-================================================
+CONCAT ESCOLA - EDICAO DE VIDEO
+===============================
 
 O QUE E ISTO
 ------------
-E o editor de video Concat, preparado para computadores da escola:
-nao precisa de instalacao, nao precisa de internet e nao procura
-actualizacoes. Tudo o que precisa ja vai dentro desta pasta.
+E o editor de video Concat, preparado para os computadores da escola:
+nao precisa de internet, nao procura actualizacoes e nao pede
+administrador. As legendas automaticas em portugues ja vao instaladas.
 
 
-ANTES DE EXTRAIR (faca isto uma vez, no computador onde baixou)
----------------------------------------------------------------
-O Windows marca tudo o que vem da internet. Se extrair o ZIP com essa
-marca, ela fica em cada ficheiro la dentro e o Windows pode recusar
-abrir algumas partes do programa.
+COMO INSTALAR (em cada computador)
+----------------------------------
+1. Faca duplo clique em "Concat-Escola-Setup.exe".
 
-Antes de extrair: clique com o botao direito no ficheiro ZIP, escolha
-"Propriedades" e, no fundo da janela, marque "Desbloquear" (ou
-"Unblock") e clique em OK. So depois extraia.
+2. Na primeira vez o Windows mostra um aviso azul a dizer
+   "O Windows protegeu o seu PC". Isto acontece porque o programa nao
+   esta assinado com um certificado pago, nao porque tenha algum
+   problema. Clique em "Mais informacoes" e depois em
+   "Executar mesmo assim".
 
-Se ja extraiu sem fazer isto e o programa der erro, apague a pasta,
-desbloqueie o ZIP e extraia de novo.
+3. Siga o instalador (Seguinte, Instalar, Concluir). Demora um ou dois
+   minutos. Fica instalado na conta de quem o instala, e aparece um
+   atalho "Concat Escola" no Ambiente de Trabalho.
 
-
-COMO POR NUM COMPUTADOR
------------------------
-1. Copie a pasta inteira "Concat Escola" para o computador.
-   Pode ser para o Ambiente de Trabalho ou para D:\.
-   NAO ponha dentro de "C:\Program Files" - o programa precisa de
-   escrever nesta pasta e ali nao consegue.
-
-2. Abra a pasta e faca duplo clique em "concat.exe".
-
-3. Na primeira vez o Windows mostra um aviso azul a dizer
-   "O Windows protegeu o seu PC". Isto acontece porque o programa
-   nao esta assinado com um certificado pago, nao porque tenha
-   algum problema. Clique em "Mais informacoes" e depois no botao
-   "Executar mesmo assim". So aparece na primeira vez.
-
-
-IMPORTANTE
-----------
-NAO APAGUE a pasta "portable" que esta aqui dentro. E ali que
-estao as definicoes e os modelos das legendas automaticas. Se a
-apagar, o programa volta aos valores de fabrica e as legendas
-deixam de funcionar sem internet.
-
-Para levar para outro computador, copie sempre a pasta inteira.
+Para levar para outros computadores, copie so o ficheiro
+"Concat-Escola-Setup.exe" numa pen. Nao e preciso mais nada.
 
 
 O QUE JA ESTA PREPARADO
 -----------------------
 - Idioma: Portugues
 - Legendas automaticas em portugues, a funcionar sem internet
-  (modelo Base Multilingue, 142 MB, ja instalado)
+  (modelo Base Multilingue, ja instalado)
 - Modelo Tiny tambem incluido: menos exacto mas muito mais rapido,
   util nos computadores mais fracos
 - Copias de navegacao ligadas: o programa faz uma copia pequena de
@@ -80,16 +58,27 @@ SE FICAR LENTO
 1. Tenha um so painel de pre-visualizacao aberto.
 2. Baixe a qualidade da pre-visualizacao para "Um quarto".
    Isto nao afecta o video final, so o que se ve enquanto edita.
+   (Nos computadores mais fracos ja abre assim.)
 3. Feche o navegador e outros programas pesados.
 4. Videos gravados em 4K sao os mais pesados. Se puder, peca aos
    alunos para gravarem em 1080p.
+5. Se a janela aparecer aos quadrados, abra o programa pelo atalho
+   "Concat Escola (graficos seguros)" no menu Iniciar.
 
 
 ONDE FICAM OS TRABALHOS
 -----------------------
 Cada projecto e uma pasta propria, escolhida quando se cria o
-projecto. O trabalho dos alunos NAO fica dentro desta pasta, por
-isso pode substituir a pasta do programa sem perder nada.
+projecto. O trabalho dos alunos NAO fica dentro da pasta do programa,
+por isso reinstalar o programa nao apaga nada.
+
+As definicoes ficam na pasta "portable", dentro da pasta do programa.
+Nao a apague: e ali que estao tambem os modelos das legendas.
+
+
+DESINSTALAR
+-----------
+Definicoes do Windows > Aplicacoes > "Concat Escola" > Desinstalar.
 
 
 LICENCA
@@ -99,4 +88,4 @@ O codigo desta versao esta em: https://github.com/Muanica/Concat
 O projecto original e de Jareer Abdullah e dos contribuidores do
 Concat: https://github.com/jub0t/Concat
 Os modelos de legendas sao do whisper.cpp, licenca MIT.
-Veja os ficheiros LICENSE e THIRD_PARTY_NOTICES.md nesta pasta.
+Veja os ficheiros LICENSE e THIRD_PARTY_NOTICES.md na pasta do programa.
