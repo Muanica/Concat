@@ -8,6 +8,20 @@ nao precisa de instalacao, nao precisa de internet e nao procura
 actualizacoes. Tudo o que precisa ja vai dentro desta pasta.
 
 
+ANTES DE EXTRAIR (faca isto uma vez, no computador onde baixou)
+---------------------------------------------------------------
+O Windows marca tudo o que vem da internet. Se extrair o ZIP com essa
+marca, ela fica em cada ficheiro la dentro e o Windows pode recusar
+abrir algumas partes do programa.
+
+Antes de extrair: clique com o botao direito no ficheiro ZIP, escolha
+"Propriedades" e, no fundo da janela, marque "Desbloquear" (ou
+"Unblock") e clique em OK. So depois extraia.
+
+Se ja extraiu sem fazer isto e o programa der erro, apague a pasta,
+desbloqueie o ZIP e extraia de novo.
+
+
 COMO POR NUM COMPUTADOR
 -----------------------
 1. Copie a pasta inteira "Concat Escola" para o computador.
