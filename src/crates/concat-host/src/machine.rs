@@ -9,6 +9,26 @@
 //! asked. Nothing here is sent anywhere; it is written into the run's own
 //! log file like every other line.
 
+/// Whether this is a modest machine: four threads or fewer, or less than
+/// five gibibytes of memory. A school's computer, or a laptop a few years
+/// old. Nothing is refused on one; the defaults that cost the most are
+/// chosen lighter - the monitor opens at Quarter instead of Half, and a
+/// proxy is written smaller - because on such a machine the picture
+/// keeping up matters more than its size.
+///
+/// Asked once and remembered: it is read on the path that draws a frame.
+pub fn is_modest() -> bool {
+    static MODEST: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *MODEST.get_or_init(|| {
+        const GIBIBYTE: u64 = 1 << 30;
+        let threads = std::thread::available_parallelism().map_or(2, |n| n.get());
+        // A machine that will not say how much memory it has is taken at
+        // its word elsewhere too; four gibibytes is the modest reading.
+        let gibibytes = crate::memory::total().map_or(4, |bytes| bytes / GIBIBYTE);
+        threads <= 4 || gibibytes < 5
+    })
+}
+
 /// One line about the build: the version, the target, and the commit CI
 /// built it from - "local" for a build from a working tree.
 pub fn build() -> String {

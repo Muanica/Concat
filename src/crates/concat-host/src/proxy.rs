@@ -33,15 +33,26 @@ use concat_media::decode::{DecodeOptions, Decoder, FrameSource};
 use concat_media::{ColorRange, EncodeOptions, Encoder, FrameSink, Priority, RateMode, VideoCodec};
 
 /// The proxy's long side is the original's divided by this, and never
-/// shorter than [`SHORTEST_LONG_SIDE`].
+/// shorter than [`shortest_long_side`].
 const DIVISOR: u32 = 4;
-const SHORTEST_LONG_SIDE: u32 = 960;
+
+/// The shortest a proxy's long side goes: 960 on an ordinary machine, 640
+/// on a modest one (see [`crate::machine::is_modest`]), where a frame
+/// decodes and scales at less than half the cost and the picture keeping
+/// up with the hand is worth more than its size.
+fn shortest_long_side() -> u32 {
+    if crate::machine::is_modest() { 640 } else { 960 }
+}
 
 /// What a proxy is written as, in its name: a copy written to another
 /// recipe is another copy. Bumped when the recipe changes, so the copies
 /// an earlier build wrote - a keyframe every two seconds, before this -
-/// are written again and the old ones swept.
-const RECIPE: &str = "intra-1";
+/// are written again and the old ones swept. The long side is part of it,
+/// so a project carried from a bigger machine to a modest one is not left
+/// reading copies written for the bigger one.
+fn recipe() -> String {
+    format!("intra-1-{}", shortest_long_side())
+}
 
 /// Whether a `width` by `height` file is worth a proxy: every video with
 /// a picture. The seek a proxy saves costs as much on an HD file as on a
@@ -51,12 +62,12 @@ pub fn wanted(width: u32, height: u32) -> bool {
 }
 
 /// The proxy's size for a `width` by `height` original: the long side a
-/// quarter of the original's, not under [`SHORTEST_LONG_SIDE`] and never
+/// quarter of the original's, not under [`shortest_long_side`] and never
 /// over the original, the aspect kept, both sides even.
 pub fn size_for(width: u32, height: u32) -> (u32, u32) {
     let (width, height) = (width.max(2), height.max(2));
     let long = width.max(height);
-    let target = (long / DIVISOR).max(SHORTEST_LONG_SIDE).min(long);
+    let target = (long / DIVISOR).max(shortest_long_side()).min(long);
     let scale = f64::from(target) / f64::from(long);
     let side = |px: u32| (((f64::from(px) * scale).round() as u32) & !1).max(2);
     (side(width), side(height))
@@ -77,7 +88,7 @@ pub fn path_for(
 ) -> Option<PathBuf> {
     let meta = std::fs::metadata(media).ok()?;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    RECIPE.hash(&mut hasher);
+    recipe().hash(&mut hasher);
     media.hash(&mut hasher);
     meta.len().hash(&mut hasher);
     if let Some(range) = range {
@@ -270,11 +281,13 @@ pub fn write(
     }
 }
 
-/// Threads for a proxy: half the machine's, at least two and at most four,
-/// so it is written faster on a bigger CPU and the window stays usable.
+/// Threads for a proxy: half the machine's, at most four, and never fewer
+/// than one. A bigger CPU writes the copy faster; a two-core machine keeps
+/// a core for the window, which is the whole point of writing it in the
+/// background.
 fn proxy_threads() -> u16 {
     let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
-    (cores / 2).clamp(2, 4) as u16
+    (cores / 2).clamp(1, 4) as u16
 }
 
 fn write_with(

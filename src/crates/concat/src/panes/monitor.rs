@@ -306,12 +306,20 @@ impl MonitorPane {
     }
 
     /// The quality tier for the project's active timeline: 0 full, 1
-    /// half, 2 quarter. Half until chosen.
+    /// half, 2 quarter. Until chosen: Half, or Quarter on a modest machine
+    /// (see [`concat_host::machine::is_modest`]), where Half is more than
+    /// the machine draws in time and the picture stalls instead. Either way
+    /// the picker is right there, and a choice is kept per timeline.
     pub fn quality_of(&self, project: &Project) -> usize {
         self.quality
             .get(&project.active_timeline_id)
             .copied()
-            .unwrap_or(1)
+            .unwrap_or_else(Self::default_quality)
+    }
+
+    /// The quality tier a timeline opens at; see [`Self::quality_of`].
+    fn default_quality() -> usize {
+        if concat_host::machine::is_modest() { 2 } else { 1 }
     }
 
     /// The frame's size at a quality tier: the output scaled, rounded to
@@ -523,16 +531,23 @@ mod tests {
     }
 
     #[test]
-    fn quality_is_half_until_chosen_and_kept_per_timeline() {
+    fn quality_is_the_default_until_chosen_and_kept_per_timeline() {
         let mut pane = MonitorPane::default();
         let mut project = Project {
             active_timeline_id: "a".to_owned(),
             ..Project::default()
         };
-        assert_eq!(pane.quality_of(&project), 1);
-        pane.quality.insert("a".to_owned(), 2);
-        assert_eq!(pane.quality_of(&project), 2);
+        // The untouched default is the machine's: Half, or Quarter on a
+        // modest one. The test runs on whichever machine CI gives it.
+        let default = MonitorPane::default_quality();
+        assert_eq!(pane.quality_of(&project), default);
+        pane.quality.insert("a".to_owned(), 0);
+        assert_eq!(pane.quality_of(&project), 0);
         project.active_timeline_id = "b".to_owned();
-        assert_eq!(pane.quality_of(&project), 1, "another timeline has its own");
+        assert_eq!(
+            pane.quality_of(&project),
+            default,
+            "another timeline has its own"
+        );
     }
 }
