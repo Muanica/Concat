@@ -5,12 +5,15 @@
 # definições já escolhidas e os modelos das legendas automáticas já lá
 # dentro.
 #
-# O que faz a pasta funcionar sem internet são duas coisas. A pasta
-# `portable` ao lado do executável, que o Concat usa em vez de %APPDATA%
-# (concat-host/src/dirs.rs), leva as definições e os modelos com ela, de
-# computador para computador. E `updateChecks: false` nas definições deixa
-# a página Versão à espera do botão em vez de gastar um minuto num pedido
-# que não pode chegar.
+# Uma pasta e não um instalador: instalar pede permissões de
+# administrador que as crianças não têm, e uma pasta copia-se de máquina
+# para máquina com uma pen.
+#
+# O que a faz funcionar sem internet são duas coisas. A pasta `portable`
+# ao lado do executável, que o Concat usa em vez de %APPDATA%
+# (concat-host/src/dirs.rs), leva as definições e os modelos com ela. E
+# `updateChecks: false` nas definições deixa a página Versão à espera do
+# botão em vez de gastar um minuto num pedido que não pode chegar.
 #
 # Não compila nada: pega nos binários que o "Build app" já fez, junta-lhes
 # o resto e publica tudo como um artefacto. Corre em minutos.
@@ -34,8 +37,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Os binários do Windows da execução escolhida: a pasta que o
-      # "Build app" preparou, mais os instaladores, que aqui não se usam.
       - name: Buscar os binários
         env:
           GH_TOKEN: ${{ github.token }}
@@ -47,35 +48,42 @@ jobs:
             --dir binarios
           ls -l binarios
 
-      # A pasta que o "Build app" preparou - concat.exe e as DLLs - sem os
-      # instaladores, que numa escola não servem: instalar pede permissões
-      # de administrador que as crianças não têm.
-      - name: Encontrar a pasta do programa
+      # A pasta que o "Build app" preparou, que ele publica zipada ao lado
+      # dos instaladores. Os instaladores ficam de fora do pacote.
+      - name: Abrir a pasta do programa
         id: app
         run: |
           set -euo pipefail
-          folder=$(find binarios -maxdepth 1 -type d -name 'Concat-*-windows-*' | head -1)
-          if [ -z "$folder" ]; then
-            echo "A execução ${{ inputs.run_id }} não trouxe a pasta do programa:"
-            ls -R binarios | head -40
+          zip=$(find binarios -maxdepth 1 -type f -name 'Concat-*-windows-*-portable.zip' | head -1)
+          if [ -z "$zip" ]; then
+            echo "A execução ${{ inputs.run_id }} não traz a pasta do programa."
+            echo "Só as execuções do Build app feitas depois de 26/11/2026 a publicam;"
+            echo "lance o Build app outra vez e use o número dessa."
+            ls -l binarios
             exit 1
           fi
-          echo "folder=$folder" >> "$GITHUB_OUTPUT"
-          echo "A pasta do programa é $folder"
+          mkdir -p pacote
+          unzip -q "$zip" -d pacote
+          if [ ! -f pacote/concat.exe ]; then
+            echo "$zip não tem concat.exe dentro:"
+            find pacote -maxdepth 1 | head -20
+            exit 1
+          fi
+          echo "A pasta veio de $zip"
 
       # Os modelos das legendas, da release onde o Concat os espelha
-      # (concat-host/src/models.rs). Verificados contra o SHA-256 que
+      # (concat-host/src/models.rs). Conferidos contra o SHA-256 que
       # models/manifest.toml guarda, que é o mesmo que o programa confere
       # quando os descarrega ele próprio: um modelo truncado pela rede
-      # falha aqui e não na aula.
+      # falha aqui, e não na aula, onde não há como voltar a buscá-lo.
       #
-      # Base Multilingue é o que se usa; Tiny Multilingue vai junto para os
-      # computadores onde o Base for lento de mais. O modelo da detecção de
-      # voz não é preciso: vai dentro do executável.
+      # Base Multilingue é o que fica escolhido; Tiny Multilingue vai
+      # junto para os computadores onde o Base for lento de mais. O modelo
+      # da detecção de voz não é preciso aqui: vai dentro do executável.
       - name: Buscar os modelos das legendas
         run: |
           set -euo pipefail
-          destino="${{ steps.app.outputs.folder }}/portable/whisper-models"
+          destino=pacote/portable/whisper-models
           mkdir -p "$destino"
           for modelo in ggml-base.bin ggml-tiny.bin; do
             esperado=$(sed -n "/^file = \"$modelo\"/,/^sha256/p" models/manifest.toml |
@@ -96,19 +104,19 @@ jobs:
           done
           ls -l "$destino"
 
-      # As definições com que o programa abre na escola. Ficam na pasta
+      # As definições com que o programa abre na escola, na pasta
       # `portable`, que é onde o Concat as procura quando ela existe.
       #
       # pt-BR é o português que o Concat traz; não há pt-PT nos ficheiros
       # de idioma. scrubCopies faz a cópia pequena de cada vídeo, sem a
       # qual a pré-visualização trava nestas máquinas. A linha do tempo
       # magnética fecha o buraco quando se apaga um clipe, como no CapCut
-      # de que as crianças vêm - sem ela ficam espaços pretos no meio do
+      # de onde as crianças vêm: sem ela ficam espaços pretos no meio do
       # vídeo, que é o engano mais comum de quem começa.
       - name: Escrever as definições
         run: |
           set -euo pipefail
-          cat > "${{ steps.app.outputs.folder }}/portable/settings.json" <<'JSON'
+          cat > pacote/portable/settings.json <<'JSON'
           {
             "locale": "pt-BR",
             "scrubCopies": true,
@@ -119,19 +127,20 @@ jobs:
             "magneticChosen": true
           }
           JSON
-          cat "${{ steps.app.outputs.folder }}/portable/settings.json"
+          python3 -c "import json;json.load(open('pacote/portable/settings.json'))"
+          cat pacote/portable/settings.json
 
       - name: Escrever o LEIA-ME
-        run: cp assets/escola/LEIA-ME.txt "${{ steps.app.outputs.folder }}/LEIA-ME.txt"
+        run: cp assets/escola/LEIA-ME.txt pacote/LEIA-ME.txt
 
-      - name: A pasta, como fica
+      - name: O pacote, como fica
         run: |
           set -euo pipefail
-          du -sh "${{ steps.app.outputs.folder }}"
-          find "${{ steps.app.outputs.folder }}" -maxdepth 2 | sort
+          du -sh pacote
+          find pacote -maxdepth 2 | sort
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Concat-Escola-windows-x86_64
-          path: ${{ steps.app.outputs.folder }}
+          path: pacote
           if-no-files-found: error

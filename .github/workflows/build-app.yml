@@ -1098,7 +1098,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "WiX failed with $LASTEXITCODE" }
           if (-not (Test-Path "stage\$name.msi")) { throw "stage\$name.msi is not there" }
           Sign "stage\$name.msi"
-          # The folder itself is not published: the two installers are.
+          # Fork "Modo Escola": the folder goes out as well, zipped. A
+          # school's computers get a folder to copy, not an installer to
+          # run - installing asks for an administrator the children do not
+          # have - and a folder carries its settings and its caption
+          # models beside it, from one machine to the next, with no
+          # internet anywhere in it. See .github/workflows/escola.yml,
+          # which is what fills it.
+          Compress-Archive -Path "stage\$name\*" -DestinationPath "stage\$name-portable.zip"
+          if (-not (Test-Path "stage\$name-portable.zip")) { throw "stage\$name-portable.zip is not there" }
+          # The folder itself is not published: the two installers are,
+          # and the zip above.
           Remove-Item -Recurse -Force "stage\$name"
 
       # The signing certificate out of the user's store again, whether the
