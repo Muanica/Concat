@@ -1,0 +1,137 @@
+# Pacote para a escola.
+#
+# Monta, a partir de uma execução do "Build app", uma pasta que corre num
+# computador da escola sem instalação e sem internet: o programa, as suas
+# definições já escolhidas e os modelos das legendas automáticas já lá
+# dentro.
+#
+# O que faz a pasta funcionar sem internet são duas coisas. A pasta
+# `portable` ao lado do executável, que o Concat usa em vez de %APPDATA%
+# (concat-host/src/dirs.rs), leva as definições e os modelos com ela, de
+# computador para computador. E `updateChecks: false` nas definições deixa
+# a página Versão à espera do botão em vez de gastar um minuto num pedido
+# que não pode chegar.
+#
+# Não compila nada: pega nos binários que o "Build app" já fez, junta-lhes
+# o resto e publica tudo como um artefacto. Corre em minutos.
+name: Pacote para a escola
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "O número da execução do Build app de onde vêm os binários"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  pacote:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Os binários do Windows da execução escolhida: a pasta que o
+      # "Build app" preparou, mais os instaladores, que aqui não se usam.
+      - name: Buscar os binários
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ inputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name Concat-windows-x86_64 \
+            --dir binarios
+          ls -l binarios
+
+      # A pasta que o "Build app" preparou - concat.exe e as DLLs - sem os
+      # instaladores, que numa escola não servem: instalar pede permissões
+      # de administrador que as crianças não têm.
+      - name: Encontrar a pasta do programa
+        id: app
+        run: |
+          set -euo pipefail
+          folder=$(find binarios -maxdepth 1 -type d -name 'Concat-*-windows-*' | head -1)
+          if [ -z "$folder" ]; then
+            echo "A execução ${{ inputs.run_id }} não trouxe a pasta do programa:"
+            ls -R binarios | head -40
+            exit 1
+          fi
+          echo "folder=$folder" >> "$GITHUB_OUTPUT"
+          echo "A pasta do programa é $folder"
+
+      # Os modelos das legendas, da release onde o Concat os espelha
+      # (concat-host/src/models.rs). Verificados contra o SHA-256 que
+      # models/manifest.toml guarda, que é o mesmo que o programa confere
+      # quando os descarrega ele próprio: um modelo truncado pela rede
+      # falha aqui e não na aula.
+      #
+      # Base Multilingue é o que se usa; Tiny Multilingue vai junto para os
+      # computadores onde o Base for lento de mais. O modelo da detecção de
+      # voz não é preciso: vai dentro do executável.
+      - name: Buscar os modelos das legendas
+        run: |
+          set -euo pipefail
+          destino="${{ steps.app.outputs.folder }}/portable/whisper-models"
+          mkdir -p "$destino"
+          for modelo in ggml-base.bin ggml-tiny.bin; do
+            esperado=$(sed -n "/^file = \"$modelo\"/,/^sha256/p" models/manifest.toml |
+              sed -n 's/^sha256 = "\(.*\)"/\1/p' | head -1)
+            if [ -z "$esperado" ]; then
+              echo "models/manifest.toml não diz o SHA-256 de $modelo"
+              exit 1
+            fi
+            echo "A buscar $modelo"
+            curl -fsSL --retry 3 -o "$destino/$modelo" \
+              "https://github.com/jub0t/Concat/releases/download/models-v1/$modelo"
+            obtido=$(sha256sum "$destino/$modelo" | cut -d' ' -f1)
+            if [ "$obtido" != "$esperado" ]; then
+              echo "$modelo chegou errado: $obtido, esperava $esperado"
+              exit 1
+            fi
+            echo "$modelo está bom"
+          done
+          ls -l "$destino"
+
+      # As definições com que o programa abre na escola. Ficam na pasta
+      # `portable`, que é onde o Concat as procura quando ela existe.
+      #
+      # pt-BR é o português que o Concat traz; não há pt-PT nos ficheiros
+      # de idioma. scrubCopies faz a cópia pequena de cada vídeo, sem a
+      # qual a pré-visualização trava nestas máquinas. A linha do tempo
+      # magnética fecha o buraco quando se apaga um clipe, como no CapCut
+      # de que as crianças vêm - sem ela ficam espaços pretos no meio do
+      # vídeo, que é o engano mais comum de quem começa.
+      - name: Escrever as definições
+        run: |
+          set -euo pipefail
+          cat > "${{ steps.app.outputs.folder }}/portable/settings.json" <<'JSON'
+          {
+            "locale": "pt-BR",
+            "scrubCopies": true,
+            "updateChecks": false,
+            "transcriberModel": "base",
+            "captionLanguage": "pt",
+            "magnetic": true,
+            "magneticChosen": true
+          }
+          JSON
+          cat "${{ steps.app.outputs.folder }}/portable/settings.json"
+
+      - name: Escrever o LEIA-ME
+        run: cp assets/escola/LEIA-ME.txt "${{ steps.app.outputs.folder }}/LEIA-ME.txt"
+
+      - name: A pasta, como fica
+        run: |
+          set -euo pipefail
+          du -sh "${{ steps.app.outputs.folder }}"
+          find "${{ steps.app.outputs.folder }}" -maxdepth 2 | sort
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Concat-Escola-windows-x86_64
+          path: ${{ steps.app.outputs.folder }}
+          if-no-files-found: error
